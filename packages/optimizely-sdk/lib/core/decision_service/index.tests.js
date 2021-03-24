@@ -18,7 +18,7 @@ import { assert } from 'chai';
 import cloneDeep from 'lodash/cloneDeep';
 import { sprintf } from '@optimizely/js-sdk-utils';
 
-import DecisionService from './';
+import { createDecisionService } from './';
 import bucketer from '../bucketer';
 import {
   LOG_LEVEL,
@@ -49,7 +49,7 @@ describe('lib/core/decision_service', function() {
     beforeEach(function() {
       bucketerStub = sinon.stub(bucketer, 'bucket');
       sinon.stub(mockLogger, 'log');
-      decisionServiceInstance = DecisionService.createDecisionService({
+      decisionServiceInstance = createDecisionService({
         logger: mockLogger,
       });
     });
@@ -164,7 +164,7 @@ describe('lib/core/decision_service', function() {
             save: function() {},
           };
 
-          decisionServiceInstance = DecisionService.createDecisionService({
+          decisionServiceInstance = createDecisionService({
             logger: mockLogger,
             userProfileService: userProfileServiceInstance,
           });
@@ -1048,7 +1048,7 @@ describe('lib/core/decision_service', function() {
         },
       });
 
-      var decisionServiceInstance = DecisionService.createDecisionService({
+      var decisionServiceInstance = createDecisionService({
         logger: createdLogger,
         userProfileService: userProfileServiceInstance,
       });
@@ -1078,7 +1078,7 @@ describe('lib/core/decision_service', function() {
     beforeEach(function() {
       sinon.stub(mockLogger, 'log');
       configObj = projectConfig.createProjectConfig(cloneDeep(testData));
-      decisionService = DecisionService.createDecisionService({
+      decisionService = createDecisionService({
         logger: mockLogger,
       });
     });
@@ -1123,7 +1123,7 @@ describe('lib/core/decision_service', function() {
         configObj = projectConfig.createProjectConfig(cloneDeep(testDataWithFeatures));
         sandbox = sinon.sandbox.create();
         sandbox.stub(mockLogger, 'log');
-        decisionServiceInstance = DecisionService.createDecisionService({
+        decisionServiceInstance = createDecisionService({
           logger: mockLogger,
         });
       });
@@ -2104,7 +2104,7 @@ describe('lib/core/decision_service', function() {
       beforeEach(function() {
         configObj = projectConfig.createProjectConfig(cloneDeep(testDataWithFeatures));
         feature = configObj.featureKeyMap.test_feature;
-        decisionService = DecisionService.createDecisionService({
+        decisionService = createDecisionService({
           logger: logger.createLogger({ logLevel: LOG_LEVEL.INFO }),
         });
         __buildBucketerParamsSpy = sinon.spy(decisionService, '__buildBucketerParams');
