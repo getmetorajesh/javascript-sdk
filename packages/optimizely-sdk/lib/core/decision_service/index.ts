@@ -31,19 +31,20 @@ import {
   getVariationKeyFromId,
   getVariationIdFromExperimentAndVariationKey,
 } from '../project_config';
-import AudienceEvaluator from '../audience_evaluator';
+import { AudienceEvaluator, createAudienceEvaluator }  from '../audience_evaluator';
 import * as stringValidator from '../../utils/string_value_validator';
 import {
-  OptimizelyDecideOption,
-  ExperimentBucketMap,
-  UserProfileService,
-  DecisionResponse,
-  BucketerParams,
-  UserAttributes,
-  FeatureFlag,
-  UserProfile,
-  Experiment,
+  Group,
   Variation,
+  Experiment,
+  UserProfile,
+  FeatureFlag,
+  UserAttributes,
+  BucketerParams,
+  DecisionResponse,
+  UserProfileService,
+  ExperimentBucketMap,
+  OptimizelyDecideOption,
 } from '../../shared_types';
 
 const MODULE_NAME = 'DECISION_SERVICE';
@@ -62,7 +63,7 @@ export interface DecisionObj {
 interface DecisionServiceOptions {
   userProfileService: UserProfileService | null;
   logger: LogHandler;
-  UNSTABLE_conditionEvaluators: any;
+  UNSTABLE_conditionEvaluators: unknown;
 }
 
 
@@ -83,12 +84,12 @@ interface DecisionServiceOptions {
  */
 export class DecisionService {
   private logger: LogHandler;
-  private audienceEvaluator: any;
-  private forcedVariationMap: any;
+  private audienceEvaluator: AudienceEvaluator;
+  private forcedVariationMap: { [key: string]: { [id: string]: string} };
   private userProfileService: UserProfileService | null;
 
   constructor(options: DecisionServiceOptions) {
-    this.audienceEvaluator = new AudienceEvaluator(options.UNSTABLE_conditionEvaluators);
+    this.audienceEvaluator = createAudienceEvaluator(options.UNSTABLE_conditionEvaluators);
     this.forcedVariationMap = {};
     this.logger = options.logger;
     this.userProfileService = options.userProfileService || null;
@@ -251,7 +252,7 @@ export class DecisionService {
   ): ExperimentBucketMap {
     attributes = attributes || {};
 
-    let userProfile = this.__getUserProfile(userId) || {} as UserProfile;
+    const userProfile = this.__getUserProfile(userId) || {} as UserProfile;
     const attributeExperimentBucketMap = attributes[enums.CONTROL_ATTRIBUTES.STICKY_BUCKETING_KEY];
     return fns.assign({}, userProfile.experiment_bucket_map, attributeExperimentBucketMap);
   }
@@ -383,7 +384,7 @@ export class DecisionService {
     bucketingId: string,
     userId: string
   ): BucketerParams {
-    let bucketerParams = {} as BucketerParams;
+    const bucketerParams = {} as BucketerParams;
     bucketerParams.experimentKey = experimentKey;
     bucketerParams.experimentId = getExperimentId(configObj, experimentKey);
     bucketerParams.userId = userId;
@@ -516,7 +517,7 @@ export class DecisionService {
     userId: string,
     attributes?: UserAttributes,
     options: { [key: string]: boolean } = {}
-  ): any {
+  ): DecisionResponse<DecisionObj> {
 
     const decideReasons = [];
     const decisionVariation = this._getVariationForFeatureExperiment(configObj, feature, userId, attributes, options);
@@ -554,17 +555,18 @@ export class DecisionService {
 
   _getVariationForFeatureExperiment(
     configObj: ProjectConfig,
-    feature: any,
+    feature: FeatureFlag,
     userId: string,
     attributes?: UserAttributes,
     options: { [key: string]: boolean } = {}
-  ): any {
+  ): DecisionResponse<DecisionObj> {
+
     const decideReasons = [];
     let experiment = null;
     let variationKey = null;
     let decisionVariation;
 
-    if (feature.hasOwnProperty('groupId')) {
+    if (feature.groupId) {
       const group = configObj.groupIdMap[feature.groupId];
       if (group) {
         experiment = this._getExperimentInGroup(configObj, group, userId);
@@ -608,9 +610,10 @@ export class DecisionService {
 
   _getExperimentInGroup(
     configObj: ProjectConfig,
-    group: any,
+    group: Group,
     userId: string
-  ): any {
+  ): Experiment | null {
+
     const experimentId = bucketer.bucketUserIntoExperiment(group, userId, userId, this.logger);
     if (experimentId) {
       this.logger.log(
@@ -866,7 +869,7 @@ export class DecisionService {
    * @returns {string}          Bucketing Id if it is a string type in attributes, user Id otherwise.
    */
   _getBucketingId(userId: string, attributes?: UserAttributes): string {
-    var bucketingId = userId;
+    let bucketingId = userId;
 
     // If the bucketing ID key is defined in attributes, than use that in place of the userID for the murmur hash key
     if (
@@ -931,17 +934,17 @@ export class DecisionService {
 
   /**
    * Gets the forced variation key for the given user and experiment.
-   * @param  {ProjectConfig}    configObj         Object representing project configuration
-   * @param  {string}           experimentKey     Key for experiment.
-   * @param  {string}           userId            The user Id.
-   * @return {Object}           DecisionResponse  DecisionResponse containing variation which the given user and experiment
-   *                                              should be forced into and the decide reasons.
+   * @param  {ProjectConfig}                  configObj         Object representing project configuration
+   * @param  {string}                         experimentKey     Key for experiment.
+   * @param  {string}                         userId            The user Id.
+   * @return {DecisionResponse<string|null>}                    DecisionResponse  DecisionResponse containing variation which the given user and experiment
+   *                                                            should be forced into and the decide reasons.
    */
   getForcedVariation(
     configObj: ProjectConfig,
     experimentKey: string,
     userId: string
-  ): any {
+  ): DecisionResponse<string | null> {
     const decideReasons: string[] = [];
     const experimentToVariationMap = this.forcedVariationMap[userId];
     if (!experimentToVariationMap) {
@@ -1111,4 +1114,4 @@ export class DecisionService {
  */
 export function createDecisionService(options: DecisionServiceOptions): DecisionService {
   return new DecisionService(options);
-};
+}
