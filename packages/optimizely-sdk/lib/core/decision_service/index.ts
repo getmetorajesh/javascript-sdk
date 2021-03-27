@@ -66,7 +66,6 @@ interface DecisionServiceOptions {
   UNSTABLE_conditionEvaluators: unknown;
 }
 
-
 /**
  * Optimizely's decision service that determines which variation of an experiment the user will be allocated to.
  *
@@ -113,10 +112,10 @@ export class DecisionService {
     options: { [key: string]: boolean } = {}
   ): DecisionResponse<string | null> {
     // by default, the bucketing ID should be the user ID
-    const bucketingId = this._getBucketingId(userId, attributes);
+    const bucketingId = this.getBucketingId(userId, attributes);
     const decideReasons = [];
 
-    if (!this.__checkIfExperimentIsActive(configObj, experimentKey)) {
+    if (!this.checkIfExperimentIsActive(configObj, experimentKey)) {
       const experimentNotRunningLogMessage = sprintf(LOG_MESSAGES.EXPERIMENT_NOT_RUNNING, MODULE_NAME, experimentKey);
       this.logger.log(LOG_LEVEL.INFO, experimentNotRunningLogMessage);
       decideReasons.push(experimentNotRunningLogMessage);
@@ -136,7 +135,7 @@ export class DecisionService {
         reasons: decideReasons,
       };
     }
-    const decisionWhitelistedVariation = this.__getWhitelistedVariation(experiment, userId);
+    const decisionWhitelistedVariation = this.getWhitelistedVariation(experiment, userId);
     decideReasons.push(...decisionWhitelistedVariation.reasons);
     let variation = decisionWhitelistedVariation.result;
 
@@ -148,11 +147,11 @@ export class DecisionService {
     }
 
     const shouldIgnoreUPS = options[OptimizelyDecideOption.IGNORE_USER_PROFILE_SERVICE];
-    const experimentBucketMap = this.__resolveExperimentBucketMap(userId, attributes);
+    const experimentBucketMap = this.resolveExperimentBucketMap(userId, attributes);
 
     // check for sticky bucketing if decide options do not include shouldIgnoreUPS
     if (!shouldIgnoreUPS) {
-      variation = this.__getStoredVariation(configObj, experiment, userId, experimentBucketMap);
+      variation = this.getStoredVariation(configObj, experiment, userId, experimentBucketMap);
       if (variation) {
         const returningStoredVariationMessage = sprintf(
           LOG_MESSAGES.RETURNING_STORED_VARIATION,
@@ -174,7 +173,7 @@ export class DecisionService {
     }
 
     // Perform regular targeting and bucketing
-    const decisionifUserIsInAudience = this.__checkIfUserIsInAudience(
+    const decisionifUserIsInAudience = this.checkIfUserIsInAudience(
       configObj,
       experimentKey,
       AUDIENCE_EVALUATION_TYPES.EXPERIMENT,
@@ -198,7 +197,7 @@ export class DecisionService {
       };
     }
 
-    const bucketerParams = this.__buildBucketerParams(configObj, experimentKey, bucketingId, userId);
+    const bucketerParams = this.buildBucketerParams(configObj, experimentKey, bucketingId, userId);
     const decisionVariation = bucketer.bucket(bucketerParams);
     decideReasons.push(...decisionVariation.reasons);
     const variationId = decisionVariation.result;
@@ -231,7 +230,7 @@ export class DecisionService {
     decideReasons.push(userInVariationLogMessage);
     // persist bucketing if decide options do not include shouldIgnoreUPS
     if (!shouldIgnoreUPS) {
-      this.__saveUserProfile(experiment, variation, userId, experimentBucketMap);
+      this.saveUserProfile(experiment, variation, userId, experimentBucketMap);
     }
 
     return {
@@ -246,13 +245,13 @@ export class DecisionService {
    * @param  {UserAttributes}       attributes
    * @return {ExperimentBucketMap}  finalized copy of experiment_bucket_map
    */
-  __resolveExperimentBucketMap(
+  private resolveExperimentBucketMap(
     userId: string,
     attributes?: UserAttributes
   ): ExperimentBucketMap {
     attributes = attributes || {};
 
-    const userProfile = this.__getUserProfile(userId) || {} as UserProfile;
+    const userProfile = this.getUserProfile(userId) || {} as UserProfile;
     const attributeExperimentBucketMap = attributes[enums.CONTROL_ATTRIBUTES.STICKY_BUCKETING_KEY];
     return fns.assign({}, userProfile.experiment_bucket_map, attributeExperimentBucketMap);
   }
@@ -263,7 +262,7 @@ export class DecisionService {
    * @param  {string}         experimentKey Key of experiment being validated
    * @return {boolean}        True if experiment is running
    */
-  __checkIfExperimentIsActive(configObj: ProjectConfig, experimentKey: string): boolean {
+  private checkIfExperimentIsActive(configObj: ProjectConfig, experimentKey: string): boolean {
     return isActive(configObj, experimentKey);
   }
 
@@ -274,7 +273,7 @@ export class DecisionService {
    * @return {DecisionResponse<Variation|null>}           DecisionResponse containing the forced variation if it exists
    *                                                      or user ID and the decide reasons.
    */
-  __getWhitelistedVariation(
+  private getWhitelistedVariation(
     experiment: Experiment,
     userId: string
   ): DecisionResponse<Variation | null> {
@@ -318,16 +317,16 @@ export class DecisionService {
 
   /**
    * Checks whether the user is included in experiment audience
-   * @param  {ProjectConfig}    configObj            The parsed project configuration object
-   * @param  {string}           experimentKey        Key of experiment being validated
-   * @param  {string}           evaluationAttribute  String representing experiment key or rule
-   * @param  {string}           userId               ID of user
-   * @param  {UserAttributes}   attributes           Optional parameter for user's attributes
-   * @param  {string}           loggingKey           String representing experiment key or rollout rule. To be used in log messages only.
-   * @return {DecisionResponse} DecisionResponse     DecisionResponse containing result true if user meets audience conditions and
-   *                                                 the decide reasons.
+   * @param  {ProjectConfig}                configObj            The parsed project configuration object
+   * @param  {string}                       experimentKey        Key of experiment being validated
+   * @param  {string}                       evaluationAttribute  String representing experiment key or rule
+   * @param  {string}                       userId               ID of user
+   * @param  {UserAttributes}               attributes           Optional parameter for user's attributes
+   * @param  {string}                       loggingKey           String representing experiment key or rollout rule. To be used in log messages only.
+   * @return {DecisionResponse<boolean>}    DecisionResponse     DecisionResponse containing result true if user meets audience conditions and
+   *                                                             the decide reasons.
    */
-  __checkIfUserIsInAudience(
+  private checkIfUserIsInAudience(
     configObj: ProjectConfig,
     experimentKey: string,
     evaluationAttribute: string,
@@ -378,7 +377,7 @@ export class DecisionService {
    * @param  {string}                userId        ID of user to be bucketed
    * @return {BucketerParams}
    */
-  __buildBucketerParams(
+  private buildBucketerParams(
     configObj: ProjectConfig,
     experimentKey: string,
     bucketingId: string,
@@ -405,7 +404,7 @@ export class DecisionService {
    * @param  {ExperimentBucketMap}  experimentBucketMap  mapping experiment => { variation_id: <variationId> }
    * @return {Variation|null}       the stored variation or null if the user profile does not have one for the given experiment
    */
-  __getStoredVariation(
+  private getStoredVariation(
     configObj: ProjectConfig,
     experiment: Experiment,
     userId: string,
@@ -437,7 +436,7 @@ export class DecisionService {
    * @param  {string} userId
    * @return {UserProfile|undefined} the stored user profile or undefined if one isn't found
    */
-  __getUserProfile(userId: string): UserProfile | undefined {
+  private getUserProfile(userId: string): UserProfile | undefined {
     const userProfile = {
       user_id: userId,
       experiment_bucket_map: {},
@@ -466,7 +465,7 @@ export class DecisionService {
    * @param {Variation}           variation
    * @param {ExperimentBucketMap} experimentBucketMap
    */
-  __saveUserProfile(
+  private saveUserProfile(
     experiment: Experiment,
     variation: Variation,
     userId: string,
@@ -520,7 +519,7 @@ export class DecisionService {
   ): DecisionResponse<DecisionObj> {
 
     const decideReasons = [];
-    const decisionVariation = this._getVariationForFeatureExperiment(configObj, feature, userId, attributes, options);
+    const decisionVariation = this.getVariationForFeatureExperiment(configObj, feature, userId, attributes, options);
     decideReasons.push(...decisionVariation.reasons);
     const experimentDecision = decisionVariation.result;
 
@@ -531,7 +530,7 @@ export class DecisionService {
       };
     }
 
-    const decisionRolloutVariation = this._getVariationForRollout(configObj, feature, userId, attributes);
+    const decisionRolloutVariation = this.getVariationForRollout(configObj, feature, userId, attributes);
     decideReasons.push(...decisionRolloutVariation.reasons);
     const rolloutDecision = decisionRolloutVariation.result;
     if (rolloutDecision.variation !== null) {
@@ -553,7 +552,7 @@ export class DecisionService {
     };
   }
 
-  _getVariationForFeatureExperiment(
+  private getVariationForFeatureExperiment(
     configObj: ProjectConfig,
     feature: FeatureFlag,
     userId: string,
@@ -569,7 +568,7 @@ export class DecisionService {
     if (feature.groupId) {
       const group = configObj.groupIdMap[feature.groupId];
       if (group) {
-        experiment = this._getExperimentInGroup(configObj, group, userId);
+        experiment = this.getExperimentInGroup(configObj, group, userId);
         if (experiment && feature.experimentIds.indexOf(experiment.id) !== -1) {
           decisionVariation = this.getVariation(configObj, experiment.key, userId, attributes, options);
           decideReasons.push(...decisionVariation.reasons);
@@ -608,7 +607,7 @@ export class DecisionService {
     };
   }
 
-  _getExperimentInGroup(
+  private getExperimentInGroup(
     configObj: ProjectConfig,
     group: Group,
     userId: string
@@ -633,7 +632,7 @@ export class DecisionService {
     return null;
   }
 
-  _getVariationForRollout(
+  private getVariationForRollout(
     configObj: ProjectConfig,
     feature: FeatureFlag,
     userId: string,
@@ -697,7 +696,7 @@ export class DecisionService {
       };
     }
 
-    const bucketingId = this._getBucketingId(userId, attributes);
+    const bucketingId = this.getBucketingId(userId, attributes);
 
     // The end index is length - 1 because the last experiment is assumed to be
     // "everyone else", which will be evaluated separately outside this loop
@@ -712,7 +711,7 @@ export class DecisionService {
     for (let index = 0; index < endIndex; index++) {
       rolloutRule = configObj.experimentKeyMap[rollout.experiments[index].key];
       loggingKey = index + 1;
-      decisionifUserIsInAudience = this.__checkIfUserIsInAudience(
+      decisionifUserIsInAudience = this.checkIfUserIsInAudience(
         configObj,
         rolloutRule.key,
         AUDIENCE_EVALUATION_TYPES.RULE,
@@ -747,7 +746,7 @@ export class DecisionService {
         userMeetsConditionsForTargetingRuleMessage
       );
       decideReasons.push(userMeetsConditionsForTargetingRuleMessage);
-      bucketerParams = this.__buildBucketerParams(configObj, rolloutRule.key, bucketingId, userId);
+      bucketerParams = this.buildBucketerParams(configObj, rolloutRule.key, bucketingId, userId);
       decisionVariation = bucketer.bucket(bucketerParams);
       decideReasons.push(...decisionVariation.reasons);
       variationId = decisionVariation.result;
@@ -790,7 +789,7 @@ export class DecisionService {
     }
 
     const everyoneElseRule = configObj.experimentKeyMap[rollout.experiments[endIndex].key];
-    const decisionifUserIsInEveryoneRule = this.__checkIfUserIsInAudience(
+    const decisionifUserIsInEveryoneRule = this.checkIfUserIsInAudience(
       configObj,
       everyoneElseRule.key,
       AUDIENCE_EVALUATION_TYPES.RULE,
@@ -810,7 +809,7 @@ export class DecisionService {
         userMeetsConditionsForEveryoneTargetingRuleMessage
       );
       decideReasons.push(userMeetsConditionsForEveryoneTargetingRuleMessage);
-      bucketerParams = this.__buildBucketerParams(configObj, everyoneElseRule.key, bucketingId, userId);
+      bucketerParams = this.buildBucketerParams(configObj, everyoneElseRule.key, bucketingId, userId);
       decisionVariation = bucketer.bucket(bucketerParams);
       decideReasons.push(...decisionVariation.reasons);
       variationId = decisionVariation.result;
@@ -868,7 +867,7 @@ export class DecisionService {
    * @param   {UserAttributes}  attributes
    * @returns {string}          Bucketing Id if it is a string type in attributes, user Id otherwise.
    */
-  _getBucketingId(userId: string, attributes?: UserAttributes): string {
+  private getBucketingId(userId: string, attributes?: UserAttributes): string {
     let bucketingId = userId;
 
     // If the bucketing ID key is defined in attributes, than use that in place of the userID for the murmur hash key
@@ -918,7 +917,7 @@ export class DecisionService {
    * @param  {number} variationId   Number representing the variation id
    * @throws If the user id is not valid
    */
-  __setInForcedVariationMap(userId: string, experimentId: string, variationId: string): void {
+  private setInForcedVariationMap(userId: string, experimentId: string, variationId: string): void {
     if (this.forcedVariationMap.hasOwnProperty(userId)) {
       this.forcedVariationMap[userId][experimentId] = variationId;
     } else {
@@ -1098,7 +1097,7 @@ export class DecisionService {
     }
 
     try {
-      this.__setInForcedVariationMap(userId, experimentId, variationId);
+      this.setInForcedVariationMap(userId, experimentId, variationId);
       return true;
     } catch (ex) {
       this.logger.log(LOG_LEVEL.ERROR, ex.message);
